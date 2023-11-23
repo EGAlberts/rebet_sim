@@ -55,7 +55,6 @@ def generate_launch_description():
             os.path.join(pkg_gazebo_ros, 'launch', 'gzserver.launch.py')
         ),
         launch_arguments={'world': world, 'verbose': 'true'}.items(),
-        env={'GAZEBO_MODEL_PATH': models_file_dir + ": " + os.environ['GAZEBO_MODEL_PATH']},
     )
 
     gzclient_cmd = IncludeLaunchDescription(
