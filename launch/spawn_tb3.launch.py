@@ -6,10 +6,42 @@ from launch.actions import IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import AnyLaunchDescriptionSource
-from launch.actions import DeclareLaunchArgument
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
+from launch.actions import DeclareLaunchArgument
+import numpy as np
 import random
+
+def get_bounding_box(pose, size):
+    min_x = pose[0] - size[0] / 2.0
+    max_x = pose[0] + size[0] / 2.0
+    min_y = pose[1] - size[1] / 2.0
+    max_y = pose[1] + size[1] / 2.0
+    return (min_x, max_x, min_y, max_y)
+
+def is_point_inside_boxes(x, y, boxes):
+    for box in boxes:
+        min_x, max_x, min_y, max_y = get_bounding_box(box['pose'], box['size'])
+        if min_x < x < max_x and min_y < y < max_y:
+            return True
+    return False
+
+sparse_world_cardboard_boxes = [
+    {'pose': (1.02883, 0.542919, 0.15), 'size': (0.5, 0.4, 0.3)},
+    {'pose': (-1.49971, 1.59531, 0.075), 'size': (0.25, 0.2, 0.15)},
+    {'pose': (0.041545, 1.67898, 0.075), 'size': (0.25, 0.2, 0.15)}
+    # Add more cardboard boxes as needed
+]
+
 def generate_launch_description():
+
+
+
+    launch_file_dir = os.path.join(get_package_share_directory('turtlebot3_gazebo'), 'launch')
+
+    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
+
+
     gui = LaunchConfiguration('gui')
     gui_arg = DeclareLaunchArgument(
         'gui',
@@ -24,17 +56,33 @@ def generate_launch_description():
     custom_world_launch_path = os.path.join(
         this_path, 'launch', 'custom_world.launch.py')
     
+    fh_x_random, fh_y_random = np.random.uniform(low=-1.8, high=1.8, size=2)
+
+    while(is_point_inside_boxes(fh_x_random,fh_y_random, sparse_world_cardboard_boxes)):
+      fh_x_random, fh_y_random = np.random.uniform(low=-1.8, high=1.8, size=2)
+
+    fire_hydrant_object = [{'pose': (fh_x_random, fh_y_random, -0.14), 'size': (0.5, 0.4, 0.3)}]
+
+    # random.seed(1337)
+
+    tb_x_random,tb_y_random = np.random.uniform(low=-1.7, high=1.7, size=2)
+
+    while(is_point_inside_boxes(tb_x_random,tb_y_random, (sparse_world_cardboard_boxes+fire_hydrant_object))):
+      tb__x_random, tb_y_random = np.random.uniform(low=-1.7, high=1.7, size=2) 
+    
+
+    box_x_pose = LaunchConfiguration('box_x_pose', default=str(fh_x_random))
+    box_y_pose = LaunchConfiguration('box_y_pose', default=str(fh_y_random))
+
+    tb_x_pose = LaunchConfiguration('x_pose', default=str(tb_x_random))
+    tb_y_pose = LaunchConfiguration('y_pose', default=str(tb_y_random))
 
 
-    possible_poses =  [(0.88,-0.56), (0.25, 0.99), (-0.65,-1.39)] #[(1.2,-1.6)]
-    random.seed(1337)
-    x_random,y_random = random.choice(possible_poses)
-    box_x_pose = LaunchConfiguration('box_x_pose', default=str(x_random))
-    box_y_pose = LaunchConfiguration('box_y_pose', default=str(y_random))
+    
     custom_world =  IncludeLaunchDescription(
         AnyLaunchDescriptionSource(custom_world_launch_path),
         launch_arguments={
-           'gui': gui
+           'gui': gui,
         }.items())
     model_name = 'fire_hydrant_small'
     spawn_box = Node(
@@ -49,8 +97,27 @@ def generate_launch_description():
         ],
         output='screen',
     )
+
+    spawn_turtlebot_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(launch_file_dir, 'spawn_turtlebot3.launch.py')
+        ),
+        launch_arguments={
+            'x_pose': tb_x_pose,
+            'y_pose': tb_y_pose
+        }.items()
+    )
+
+    robot_state_publisher_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(launch_file_dir, 'robot_state_publisher.launch.py')
+        ),
+        launch_arguments={'use_sim_time': use_sim_time}.items()
+    )
     return LaunchDescription([
         custom_world,
         spawn_box,
+        spawn_turtlebot_cmd,
+        robot_state_publisher_cmd,
         gui_arg,
     ])
